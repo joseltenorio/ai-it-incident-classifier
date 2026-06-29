@@ -1,45 +1,30 @@
-import pytest
-from pydantic import ValidationError
+# tests/test_health.py
 
-from app.schemas import IncidentRequest, SourceChannel
+from fastapi.testclient import TestClient
 
+from app.main import app
 
-def test_incident_request_accepts_valid_payload() -> None:
-    payload = IncidentRequest(
-        title="No puedo conectarme a la VPN",
-        description=(
-            "Desde ayer intento conectarme a la VPN de la empresa, "
-            "pero aparece error de autenticación."
-        ),
-        reported_by="usuario.demo@empresa.com",
-        source_channel=SourceChannel.WEB,
-    )
-
-    assert payload.title == "No puedo conectarme a la VPN"
-    assert payload.reported_by == "usuario.demo@empresa.com"
-    assert payload.source_channel == SourceChannel.WEB
+client = TestClient(app)
 
 
-def test_incident_request_rejects_short_title() -> None:
-    with pytest.raises(ValidationError):
-        IncidentRequest(
-            title="VPN",
-            description="El usuario no puede conectarse a la VPN corporativa.",
-        )
+def test_root_endpoint_returns_service_metadata() -> None:
+    """Verify that the root endpoint exposes basic service metadata."""
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+
+    payload = response.json()
+
+    assert payload["service"] == "AI IT Incident Classifier"
+    assert payload["status"] == "running"
+    assert payload["version"] == "0.1.0"
 
 
-def test_incident_request_rejects_short_description() -> None:
-    with pytest.raises(ValidationError):
-        IncidentRequest(
-            title="Problema de acceso VPN",
-            description="Error",
-        )
+def test_health_endpoint_returns_healthy_status() -> None:
+    """Verify that the health endpoint can be used as a runtime check."""
 
+    response = client.get("/health")
 
-def test_incident_request_uses_api_as_default_source_channel() -> None:
-    payload = IncidentRequest(
-        title="Problema de acceso VPN",
-        description="El usuario no puede conectarse a la VPN corporativa.",
-    )
-
-    assert payload.source_channel == SourceChannel.API
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
