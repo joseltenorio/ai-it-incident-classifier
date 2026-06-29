@@ -1,0 +1,1 @@
+"""Core domain logic, catalogs, prompts and validation utilities."""
