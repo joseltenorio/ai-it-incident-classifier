@@ -4,17 +4,17 @@ Classifies IT support incidents with generative AI and stores results on Google 
 
 ## Overview
 
-AI IT Incident Classifier is a cloud-oriented application that automates the initial triage of IT support incidents.
+AI IT Incident Classifier is a cloud-oriented application for automating the initial triage of IT support incidents.
 
 The system receives incident reports through a REST API, validates the input payload, classifies each incident by category, priority and responsible area, and returns a structured response with a technical summary, suggested action, confidence level and manual review flag.
 
-The project is designed as a practical Cloud, Infrastructure and AI automation use case. It demonstrates how generative AI can support IT operations by reducing repetitive manual triage work, standardizing ticket classification and preparing incident data for later operational analysis in Google Cloud.
+The project demonstrates a practical Cloud, Infrastructure and AI automation use case: using generative AI to reduce repetitive manual triage work, standardize incident classification and prepare operational data for later analysis in Google Cloud.
 
 ## Use Case
 
-In many support teams, incoming incidents must be manually reviewed before they can be assigned to the right area.
+Support teams often receive incidents that must be manually reviewed before they can be assigned to the correct area.
 
-Examples include:
+Examples:
 
 ```text
 - I cannot connect to the corporate VPN.
@@ -24,7 +24,7 @@ Examples include:
 - A user reported suspicious login activity.
 ```
 
-This application automates that first analysis step by producing a structured incident classification that can be reviewed, stored and analyzed.
+This application automates the first analysis step by producing a structured incident classification that can be reviewed, stored and analyzed.
 
 ## Architecture
 
@@ -35,7 +35,9 @@ FastAPI Backend
         ↓
 Incident Payload Validation
         ↓
-Generative AI Classifier
+Classifier Provider
+        ├── Mock Classifier
+        └── Gemini API
         ↓
 Structured Response Validation
         ↓
@@ -49,10 +51,11 @@ Operational Analysis
 - Receives IT support incidents through a REST API.
 - Validates request payloads with typed Pydantic schemas.
 - Classifies incidents using controlled categories, priorities and responsible areas.
+- Supports a deterministic mock classifier for local development and tests.
+- Supports Gemini API as the generative AI classifier provider.
 - Generates a technical summary and suggested first action.
 - Flags ambiguous or low-confidence incidents for human review.
 - Generates stable incident identifiers for traceability.
-- Stores classification-ready records for operational analysis in Google Cloud.
 - Exposes health endpoints for local and cloud runtime validation.
 - Provides automated tests for API health checks, payload validation and classification contract behavior.
 
@@ -70,12 +73,12 @@ The classifier returns a structured response with the following fields:
   "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
   "confidence_level": "Media",
   "needs_human_review": false,
-  "model_name": "gemini-1.5-flash-mock",
+  "model_name": "gemini-3.5-flash-mock",
   "created_at": "2026-06-29T10:30:00Z"
 }
 ```
 
-The current implementation uses a deterministic mock classifier to validate the API contract before integrating Gemini API. The mock classifier will later be replaced by the generative AI classifier while preserving the same public response structure.
+The response structure remains stable regardless of whether the backend uses the mock classifier or Gemini API.
 
 ## Controlled Values
 
@@ -137,9 +140,27 @@ POST /incidents/classify
 
 Returns basic service metadata.
 
+Example response:
+
+```json
+{
+  "service": "AI IT Incident Classifier",
+  "status": "running",
+  "version": "0.1.0"
+}
+```
+
 ### `GET /health`
 
 Returns the runtime health status of the API.
+
+Example response:
+
+```json
+{
+  "status": "healthy"
+}
+```
 
 ### `POST /incidents/classify`
 
@@ -168,12 +189,79 @@ Example response:
   "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
   "confidence_level": "Media",
   "needs_human_review": false,
-  "model_name": "gemini-1.5-flash-mock",
+  "model_name": "gemini-3.5-flash-mock",
   "created_at": "2026-06-29T10:30:00Z"
 }
 ```
 
 See [`docs/api_contract.md`](docs/api_contract.md) for the full request and response contract.
+
+## Classifier Providers
+
+The backend supports two classifier providers:
+
+```text
+mock
+gemini
+```
+
+The provider is selected through:
+
+```env
+CLASSIFIER_PROVIDER=mock
+```
+
+or:
+
+```env
+CLASSIFIER_PROVIDER=gemini
+```
+
+### Mock Classifier
+
+The mock classifier uses deterministic local rules.
+
+It is useful for:
+
+- Local development.
+- Automated tests.
+- Contract validation.
+- Running the API without external services.
+
+### Gemini Classifier
+
+The Gemini classifier uses Gemini API to classify IT incidents with generative AI.
+
+The integration uses:
+
+- Controlled catalogs
+- Prompt construction
+- Structured JSON output
+- Pydantic validation
+- Fallback handling for invalid model responses
+
+See [`docs/gemini_setup.md`](docs/gemini_setup.md) for Gemini API configuration.
+
+## Environment Variables
+
+The project uses environment-based configuration.
+
+```env
+APP_NAME=AI IT Incident Classifier
+APP_VERSION=0.1.0
+ENVIRONMENT=local
+
+CLASSIFIER_PROVIDER=mock
+
+GOOGLE_CLOUD_PROJECT=your-google-cloud-project-id
+BIGQUERY_DATASET=ai_operations
+BIGQUERY_TABLE=incident_classifications
+
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-3.5-flash
+```
+
+Real secrets such as API keys must be configured locally or as cloud runtime environment variables. They must never be committed to the repository.
 
 ## Tech Stack
 
@@ -193,7 +281,7 @@ See [`docs/api_contract.md`](docs/api_contract.md) for the full request and resp
 app/
   api/          API route modules
   core/         Domain catalogs, validation rules and classification utilities
-  services/     Classifier, incident ID and future cloud service integrations
+  services/     Classifier, incident ID and cloud service integrations
   utils/        Shared runtime utilities
 
 tests/          Automated test suite
@@ -222,7 +310,7 @@ Install development dependencies:
 pip install -r requirements-dev.txt
 ```
 
-Copy the environment template:
+Create a local environment file from the template:
 
 ```powershell
 Copy-Item .env.example .env
@@ -246,25 +334,6 @@ Health check:
 http://127.0.0.1:8000/health
 ```
 
-## Environment Variables
-
-The project uses environment-based configuration.
-
-```env
-APP_NAME=AI IT Incident Classifier
-APP_VERSION=0.1.0
-ENVIRONMENT=local
-
-GOOGLE_CLOUD_PROJECT=
-BIGQUERY_DATASET=ai_operations
-BIGQUERY_TABLE=incident_classifications
-
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-1.5-flash
-```
-
-Real secrets such as API keys must be configured locally or as Cloud Run environment variables. They should never be committed to the repository.
-
 ## Testing
 
 Run the automated test suite:
@@ -273,7 +342,7 @@ Run the automated test suite:
 python -m pytest
 ```
 
-The current tests cover:
+The test suite covers:
 
 - Root and health endpoints.
 - Incident request payload validation.
@@ -281,12 +350,11 @@ The current tests cover:
 - Incident ID generation.
 - Classification output validation and fallback behavior.
 - Mock classifier behavior.
+- Classification endpoint behavior.
 
-## Current Status
+## Current Implementation
 
-The project currently includes the backend foundation and the incident classification contract.
-
-Implemented:
+The current implementation includes:
 
 - FastAPI application setup.
 - Root and health endpoints.
@@ -296,27 +364,18 @@ Implemented:
 - Priority and ownership rules.
 - Stable incident ID generation.
 - Mock incident classifier.
+- Gemini classifier provider configuration.
 - Classification output validation.
 - `POST /incidents/classify`.
 - Automated tests for the current backend behavior.
 
-Planned next steps:
-
-- Integrate Gemini API as the real generative AI classifier.
-- Store classification results in BigQuery.
-- Add incident history query endpoints.
-- Add Docker support and deploy the backend to Cloud Run.
-- Add a lightweight React frontend demo.
-- Add a Postman validation suite.
-- Finalize portfolio documentation and screenshots.
-
 ## Portfolio Scope
 
-This project is intended to demonstrate practical skills in:
+This project demonstrates practical skills in:
 
 - Cloud-native API development.
 - Generative AI integration.
 - IT operations automation.
 - Backend validation and structured API contracts.
 - Google Cloud deployment foundations.
-- Operational data persistence for later analysis.
+- Operational data persistence for analysis.
