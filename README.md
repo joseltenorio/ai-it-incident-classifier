@@ -41,18 +41,22 @@ Classifier Provider
         ↓
 Structured Response Validation
         ↓
-BigQuery
+BigQuery Persistence
         ↓
 Operational Analysis
 ```
+
+BigQuery persistence is part of the planned cloud storage layer. The current backend already prepares structured incident classification responses that will later be stored for traceability and operational analysis.
 
 ## Core Capabilities
 
 - Receives IT support incidents through a REST API.
 - Validates request payloads with typed Pydantic schemas.
 - Classifies incidents using controlled categories, priorities and responsible areas.
-- Supports a deterministic mock classifier for local development and tests.
+- Supports a deterministic mock classifier for local development and automated tests.
 - Supports Gemini API as the generative AI classifier provider.
+- Builds controlled prompts using classification catalogs and triage rules.
+- Validates structured classifier outputs before returning API responses.
 - Generates a technical summary and suggested first action.
 - Flags ambiguous or low-confidence incidents for human review.
 - Generates stable incident identifiers for traceability.
@@ -205,42 +209,52 @@ mock
 gemini
 ```
 
-The provider is selected through:
+The selected provider is controlled by the `CLASSIFIER_PROVIDER` environment variable.
 
-```env
-CLASSIFIER_PROVIDER=mock
-```
+### `mock`
 
-or:
+The mock provider uses deterministic local rules.
 
-```env
-CLASSIFIER_PROVIDER=gemini
-```
+It is used for:
 
-### Mock Classifier
-
-The mock classifier uses deterministic local rules.
-
-It is useful for:
-
-- Local development.
 - Automated tests.
-- Contract validation.
-- Running the API without external services.
+- Local contract validation.
+- Development without external API calls.
+- Running the API without secrets.
 
-### Gemini Classifier
+The mock classifier keeps the backend predictable while the API contract, validation layer and documentation evolve.
 
-The Gemini classifier uses Gemini API to classify IT incidents with generative AI.
+### `gemini`
 
-The integration uses:
+The Gemini provider uses Gemini API to classify IT incidents with generative AI.
 
-- Controlled catalogs
-- Prompt construction
-- Structured JSON output
-- Pydantic validation
-- Fallback handling for invalid model responses
+The Gemini integration is responsible for:
+
+- Building a controlled prompt from the incident payload.
+- Sending the classification request to Gemini API.
+- Requesting a structured JSON response.
+- Validating the response with Pydantic.
+- Returning a stable API response.
+- Falling back to manual review when the model output is invalid or unavailable.
+
+The response structure remains the same whether the backend uses the deterministic mock provider or the Gemini provider.
+
+## Gemini Output Validation
+
+Gemini responses are validated against the same controlled classification contract used by the rest of the API.
+
+The model must return only supported values for:
+
+- Category
+- Priority
+- Responsible area
+- Confidence level
+
+If the model response is invalid, incomplete or unavailable, the backend returns a safe fallback classification marked for human review.
 
 See [`docs/gemini_setup.md`](docs/gemini_setup.md) for Gemini API configuration.
+
+See [`docs/gemini_classifier.md`](docs/gemini_classifier.md) for the Gemini classifier technical design.
 
 ## Environment Variables
 
@@ -350,6 +364,8 @@ The test suite covers:
 - Incident ID generation.
 - Classification output validation and fallback behavior.
 - Mock classifier behavior.
+- Prompt construction for Gemini.
+- Classifier provider selection.
 - Classification endpoint behavior.
 
 ## Current Implementation
@@ -365,9 +381,13 @@ The current implementation includes:
 - Stable incident ID generation.
 - Mock incident classifier.
 - Gemini classifier provider configuration.
+- Prompt builder for Gemini classification.
 - Classification output validation.
+- Fallback handling for invalid classifier responses.
 - `POST /incidents/classify`.
 - Automated tests for the current backend behavior.
+
+BigQuery persistence, incident history queries, Docker and Cloud Run deployment are planned for later project stages.
 
 ## Portfolio Scope
 
