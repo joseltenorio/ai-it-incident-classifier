@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "local"
 
+    # Classifier provider.
+    # mock keeps local development deterministic, while gemini enables the
+    # real generative AI classifier when the API key is configured.
+    classifier_provider: str = "mock"
+
     # Google Cloud and BigQuery settings.
     # google_cloud_project is optional in local mode because some features
     # can run without connecting to Google Cloud during early development.
@@ -23,9 +28,9 @@ class Settings(BaseSettings):
     bigquery_table: str = "incident_classifications"
 
     # Gemini settings.
-    # The API key will be required once the real AI classifier is integrated.
+    # The API key is required only when classifier_provider is set to gemini.
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
 
     # Pydantic settings configuration.
     # Local values are loaded from .env, while Cloud Run will provide the same
@@ -40,6 +45,11 @@ class Settings(BaseSettings):
     def is_local(self) -> bool:
         """Return True when the application is running in local mode."""
         return self.environment.lower() == "local"
+
+    @property
+    def use_gemini_classifier(self) -> bool:
+        """Return True when the configured classifier provider is Gemini."""
+        return self.classifier_provider.lower() == "gemini"
 
     @property
     def bigquery_table_id(self) -> str | None:
