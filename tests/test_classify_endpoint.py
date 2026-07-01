@@ -49,3 +49,27 @@ def test_classify_endpoint_rejects_invalid_payload() -> None:
     )
 
     assert response.status_code == 422
+
+def test_classify_endpoint_works_when_bigquery_persistence_is_disabled(
+    monkeypatch,
+) -> None:
+    """Verify that the endpoint does not require BigQuery when persistence is off."""
+
+    from app.api import routes_incidents
+
+    monkeypatch.setattr(routes_incidents.settings, "enable_bigquery_persistence", False)
+
+    response = client.post(
+        "/incidents/classify",
+        json={
+            "title": "No puedo conectarme a la VPN",
+            "description": (
+                "Desde ayer intento conectarme a la VPN de la empresa, "
+                "pero aparece error de autenticación."
+            ),
+            "source_channel": "api",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["category"] == "VPN"
