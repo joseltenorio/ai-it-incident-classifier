@@ -256,6 +256,33 @@ See [`docs/gemini_setup.md`](docs/gemini_setup.md) for Gemini API configuration.
 
 See [`docs/gemini_classifier.md`](docs/gemini_classifier.md) for the Gemini classifier technical design.
 
+## BigQuery Persistence
+
+The API can store classified incidents in BigQuery for traceability and operational analysis.
+
+Persistence is controlled through:
+
+```env
+ENABLE_BIGQUERY_PERSISTENCE=true
+```
+
+When enabled, the backend stores each classification in:
+
+```text
+ai_operations.incident_classifications
+```
+
+Stored records include the original incident, classification output, model metadata, raw model response and creation timestamp.
+
+The SQL setup scripts are available in:
+
+```text
+sql/create_bigquery_dataset.sql
+sql/create_incident_classifications_table.sql
+```
+
+See [`docs/bigquery_persistence.md`](docs/bigquery_persistence.md) for the full setup guide.
+
 ## Environment Variables
 
 The project uses environment-based configuration.
