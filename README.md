@@ -77,7 +77,7 @@ The classifier returns a structured response with the following fields:
   "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
   "confidence_level": "Media",
   "needs_human_review": false,
-  "model_name": "gemini-3.5-flash-mock",
+  "model_name": "gemini-2.5-flash-mock",
   "created_at": "2026-06-29T10:30:00Z"
 }
 ```
@@ -193,7 +193,7 @@ Example response:
   "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
   "confidence_level": "Media",
   "needs_human_review": false,
-  "model_name": "gemini-3.5-flash-mock",
+  "model_name": "gemini-2.5-flash-mock",
   "created_at": "2026-06-29T10:30:00Z"
 }
 ```
@@ -272,7 +272,7 @@ BIGQUERY_DATASET=ai_operations
 BIGQUERY_TABLE=incident_classifications
 
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 Real secrets such as API keys must be configured locally or as cloud runtime environment variables. They must never be committed to the repository.

@@ -41,7 +41,7 @@ The Gemini integration uses the following environment variables:
 ```env
 CLASSIFIER_PROVIDER=gemini
 GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ## Required Variables
@@ -66,7 +66,7 @@ BIGQUERY_DATASET=ai_operations
 BIGQUERY_TABLE=incident_classifications
 
 GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ## Security Requirements
@@ -127,7 +127,7 @@ Invalid or incomplete model responses are converted into a safe fallback classif
 The default Gemini model for this project is:
 
 ```text
-gemini-3.5-flash
+gemini-2.5-flash
 ```
 
 This model is configured through `GEMINI_MODEL` and can be changed without modifying the classifier logic.

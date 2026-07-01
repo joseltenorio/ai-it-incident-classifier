@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     # Gemini settings.
     # The API key is required only when classifier_provider is set to gemini.
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
 
     # Pydantic settings configuration.
     # Local values are loaded from .env, while Cloud Run will provide the same

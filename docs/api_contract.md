@@ -63,7 +63,7 @@ The Gemini provider is enabled with:
 ```env
 CLASSIFIER_PROVIDER=gemini
 GEMINI_API_KEY=your_api_key_here
-GEMINI_MODEL=gemini-3.5-flash
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ### Request Body
@@ -107,7 +107,7 @@ GEMINI_MODEL=gemini-3.5-flash
   "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
   "confidence_level": "Media",
   "needs_human_review": false,
-  "model_name": "gemini-1.5-flash-mock",
+  "model_name": "gemini-2.5-flash-mock",
   "created_at": "2026-06-29T10:30:00Z"
 }
 ```
