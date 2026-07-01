@@ -1,14 +1,18 @@
 # app/services/gemini_classifier.py
 
+import logging
 from time import perf_counter
 from typing import Any
 
 from google import genai
+from google.genai import types
 
 from app.config import settings
 from app.core.classification_validator import validate_or_fallback
 from app.core.prompt_builder import build_incident_classification_prompt
 from app.schemas import IncidentClassification, IncidentRequest
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiClassifierError(RuntimeError):
@@ -31,38 +35,49 @@ def classify_incident_with_gemini(
         )
 
     prompt = build_incident_classification_prompt(request)
-    client = genai.Client(api_key=settings.gemini_api_key)
+
+    # Retries are limited to one attempt during local development.
+    # This prevents one Swagger/Postman request from being multiplied into
+    # several Gemini API attempts when the API returns 429 rate-limit errors.
+    client = genai.Client(
+        api_key=settings.gemini_api_key,
+        http_options=types.HttpOptions(
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
 
     started_at = perf_counter()
 
     try:
-        interaction = client.interactions.create(
+        response = client.models.generate_content(
             model=settings.gemini_model,
-            input=prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": IncidentClassification.model_json_schema(),
-            },
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0,
+                response_mime_type="application/json",
+                response_schema=IncidentClassification,
+            ),
         )
     except Exception as exc:
-        raise GeminiClassifierError("Gemini API request failed.") from exc
+        logger.exception("Gemini API request failed.")
+        raise GeminiClassifierError(f"Gemini API request failed: {exc}") from exc
 
     latency_ms = int((perf_counter() - started_at) * 1000)
-    raw_output = _extract_output_text(interaction)
+    raw_output = _extract_output_text(response)
 
     try:
         classification = IncidentClassification.model_validate_json(raw_output)
     except Exception:
+        logger.exception("Gemini returned invalid structured output.")
         classification = validate_or_fallback(_safe_empty_payload())
 
     return classification, raw_output, latency_ms
 
 
-def _extract_output_text(interaction: Any) -> str:
-    """Extract the text output returned by the Gemini SDK interaction object."""
+def _extract_output_text(response: Any) -> str:
+    """Extract the text output returned by the Gemini SDK response object."""
 
-    output_text = getattr(interaction, "output_text", None)
+    output_text = getattr(response, "text", None)
 
     if not output_text:
         raise GeminiClassifierError("Gemini returned an empty response.")
