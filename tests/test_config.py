@@ -36,3 +36,27 @@ def test_settings_rejects_unknown_classifier_provider() -> None:
             _env_file=None,
             classifier_provider="unknown",
         )
+
+
+def test_settings_disables_bigquery_persistence_by_default() -> None:
+    """Verify that BigQuery persistence is disabled by default."""
+
+    settings = Settings(_env_file=None)
+
+    assert settings.enable_bigquery_persistence is False
+
+
+def test_settings_builds_bigquery_table_id_when_project_is_configured() -> None:
+    """Verify that BigQuery table ID follows the expected format."""
+
+    settings = Settings(
+        _env_file=None,
+        google_cloud_project="demo-project",
+        bigquery_dataset="ai_operations",
+        bigquery_table="incident_classifications",
+    )
+
+    assert (
+        settings.bigquery_table_id
+        == "demo-project.ai_operations.incident_classifications"
+    )
