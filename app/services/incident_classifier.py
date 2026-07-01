@@ -1,5 +1,7 @@
 # app/services/incident_classifier.py
 
+import logging
+
 from app.config import settings
 from app.core.classification_validator import build_fallback_classification
 from app.schemas import IncidentClassification, IncidentRequest
@@ -8,6 +10,8 @@ from app.services.gemini_classifier import (
     classify_incident_with_gemini,
 )
 from app.services.mock_classifier import classify_incident_with_mock
+
+logger = logging.getLogger(__name__)
 
 
 def classify_incident(
@@ -23,6 +27,7 @@ def classify_incident(
         try:
             return classify_incident_with_gemini(request)
         except GeminiClassifierError as exc:
+            logger.warning("Gemini classifier failed. Returning fallback: %s", exc)
             fallback = build_fallback_classification()
             return fallback, str(exc), 0
 
