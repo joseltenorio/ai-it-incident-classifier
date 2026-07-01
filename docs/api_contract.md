@@ -38,7 +38,33 @@ Example response:
 
 Classifies an IT support incident.
 
-The current implementation uses a deterministic mock classifier. A later implementation will replace the mock classifier with Gemini API while preserving the same request and response contract.
+The endpoint supports provider-based classification through the `CLASSIFIER_PROVIDER` environment variable.
+
+Supported providers:
+
+```text
+mock
+gemini
+```
+
+The public request and response contract remains the same regardless of the selected provider.
+
+### Provider Behavior
+
+| Provider | Description                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `mock`   | Uses deterministic local rules for local development, automated tests and API contract validation.                        |
+| `gemini` | Uses Gemini API to classify incidents with generative AI and validates the structured model response before returning it. |
+
+The mock provider is the default so the backend can run without external API calls or secrets.
+
+The Gemini provider is enabled with:
+
+```env
+CLASSIFIER_PROVIDER=gemini
+GEMINI_API_KEY=your_api_key_here
+GEMINI_MODEL=gemini-3.5-flash
+```
 
 ### Request Body
 
@@ -157,6 +183,12 @@ The `needs_human_review` field must be set to `true` when:
 - The model response is invalid or incomplete.
 - The incident requires human judgment due to operational or security risk.
 
-## Current Limitation
+## Current Runtime Behavior
 
-The current `/incidents/classify` endpoint uses a local mock classifier. This allows the API contract, validation rules and frontend integration to be developed before connecting the real generative AI classifier.
+The API currently supports both mock and Gemini classifier providers.
+
+The mock provider is used by default for deterministic local development and automated tests.
+
+The Gemini provider can be enabled by setting `CLASSIFIER_PROVIDER=gemini` and configuring a valid `GEMINI_API_KEY`.
+
+BigQuery persistence is not implemented yet. Classification results are returned by the API but are not stored until the BigQuery persistence layer is added.
