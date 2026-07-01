@@ -1,6 +1,15 @@
 # app/config.py
 
+from enum import StrEnum
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class ClassifierProvider(StrEnum):
+    """Supported classifier providers for incident triage."""
+
+    MOCK = "mock"
+    GEMINI = "gemini"
 
 
 class Settings(BaseSettings):
@@ -18,7 +27,7 @@ class Settings(BaseSettings):
     # Classifier provider.
     # mock keeps local development deterministic, while gemini enables the
     # real generative AI classifier when the API key is configured.
-    classifier_provider: str = "mock"
+    classifier_provider: ClassifierProvider = ClassifierProvider.MOCK
 
     # Google Cloud and BigQuery settings.
     # google_cloud_project is optional in local mode because some features
@@ -49,7 +58,7 @@ class Settings(BaseSettings):
     @property
     def use_gemini_classifier(self) -> bool:
         """Return True when the configured classifier provider is Gemini."""
-        return self.classifier_provider.lower() == "gemini"
+        return self.classifier_provider == ClassifierProvider.GEMINI
 
     @property
     def bigquery_table_id(self) -> str | None:
