@@ -29,9 +29,12 @@ class Settings(BaseSettings):
     # real generative AI classifier when the API key is configured.
     classifier_provider: ClassifierProvider = ClassifierProvider.MOCK
 
+    # BigQuery persistence is disabled by default so tests and local API
+    # contract validation can run without Google Cloud credentials.
+    enable_bigquery_persistence: bool = False
+
     # Google Cloud and BigQuery settings.
-    # google_cloud_project is optional in local mode because some features
-    # can run without connecting to Google Cloud during early development.
+    # google_cloud_project is optional while persistence is disabled.
     google_cloud_project: str | None = None
     bigquery_dataset: str = "ai_operations"
     bigquery_table: str = "incident_classifications"
