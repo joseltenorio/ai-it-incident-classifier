@@ -62,6 +62,7 @@ BigQuery persistence is available as an optional storage layer. When `ENABLE_BIG
 - Generates stable incident identifiers for traceability.
 - Exposes health endpoints for local and cloud runtime validation.
 - Provides automated tests for API health checks, payload validation and classification contract behavior.
+- Provides BigQuery-backed incident history and detail lookup endpoints.
 
 ## Classification Contract
 
@@ -138,6 +139,8 @@ The `confidence_level` field is qualitative. It is not intended to represent a s
 GET  /
 GET  /health
 POST /incidents/classify
+GET  /incidents
+GET  /incidents/{incident_id}
 ```
 
 ### `GET /`
@@ -283,6 +286,31 @@ sql/create_incident_classifications_table.sql
 
 See [`docs/bigquery_persistence.md`](docs/bigquery_persistence.md) for the full setup guide.
 
+## Incident History API
+
+The backend can query classified incidents stored in BigQuery.
+
+Available endpoints:
+
+```text
+GET /incidents
+GET /incidents/{incident_id}
+```
+
+`GET /incidents` returns recent classified incidents with compact fields for operational review.
+
+`GET /incidents/{incident_id}` returns a full incident detail response, excluding `raw_model_response`, which remains stored in BigQuery for audit and troubleshooting.
+
+These endpoints require the BigQuery table configured through:
+
+```env
+GOOGLE_CLOUD_PROJECT=your-google-cloud-project-id
+BIGQUERY_DATASET=ai_operations
+BIGQUERY_TABLE=incident_classifications
+```
+
+See [`docs/api_contract.md`](docs/api_contract.md) for request and response examples.
+
 ## Environment Variables
 
 The project uses environment-based configuration.
@@ -412,9 +440,12 @@ The current implementation includes:
 - Classification output validation.
 - Fallback handling for invalid classifier responses.
 - `POST /incidents/classify`.
+- `GET /incidents`.
+- `GET /incidents/{incident_id}`.
+- BigQuery-backed incident history queries.
 - Automated tests for the current backend behavior.
 
-Incident history queries, Docker and Cloud Run deployment are planned for later project stages.
+Docker and Cloud Run deployment are planned for later project stages.
 
 ## Portfolio Scope
 

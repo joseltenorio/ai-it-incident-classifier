@@ -183,6 +183,112 @@ The `needs_human_review` field must be set to `true` when:
 - The model response is invalid or incomplete.
 - The incident requires human judgment due to operational or security risk.
 
+## Incident History Endpoints
+
+The API exposes BigQuery-backed endpoints to query classified incidents.
+
+These endpoints require:
+
+```env
+GOOGLE_CLOUD_PROJECT=your-google-cloud-project-id
+BIGQUERY_DATASET=ai_operations
+BIGQUERY_TABLE=incident_classifications
+```
+
+The BigQuery table must already exist and contain classification records.
+
+### `GET /incidents`
+
+Returns recent classified incidents stored in BigQuery.
+
+Optional query parameter:
+
+| Parameter |    Type | Default | Description                                                            |
+| --------- | ------: | ------: | ---------------------------------------------------------------------- |
+| `limit`   | integer |    `20` | Maximum number of recent incidents to return. Allowed range: 1 to 100. |
+
+Example request:
+
+```text
+GET /incidents?limit=10
+```
+
+Example response:
+
+```json
+[
+  {
+    "incident_id": "INC-20260704-8E878D27",
+    "title": "No puedo conectarme a la VPN",
+    "category": "VPN",
+    "priority": "Media",
+    "responsible_area": "Infraestructura",
+    "confidence_level": "Media",
+    "needs_human_review": false,
+    "model_name": "gemini-2.5-flash-mock",
+    "created_at": "2026-07-04T02:41:24.444151Z"
+  }
+]
+```
+
+### `GET /incidents/{incident_id}`
+
+Returns the detail of one classified incident.
+
+Example request:
+
+```text
+GET /incidents/INC-20260704-8E878D27
+```
+
+Example response:
+
+```json
+{
+  "incident_id": "INC-20260704-8E878D27",
+  "title": "No puedo conectarme a la VPN",
+  "description": "Desde ayer intento conectarme a la VPN de la empresa, pero aparece error de autenticación.",
+  "reported_by": "usuario.demo@empresa.com",
+  "source_channel": "postman",
+  "category": "VPN",
+  "priority": "Media",
+  "responsible_area": "Infraestructura",
+  "summary": "The incident was classified as VPN based on the provided title and description: No puedo conectarme a la VPN.",
+  "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
+  "confidence_level": "Media",
+  "needs_human_review": false,
+  "model_name": "gemini-2.5-flash-mock",
+  "model_latency_ms": 0,
+  "created_at": "2026-07-04T02:41:24.444151Z"
+}
+```
+
+The `raw_model_response` field remains stored in BigQuery but is not exposed by the public detail endpoint.
+
+### Error Responses
+
+If an incident ID does not exist:
+
+```json
+{
+  "detail": {
+    "error": "incident_not_found",
+    "message": "No incident was found for the provided incident_id."
+  }
+}
+```
+
+If BigQuery is unavailable or misconfigured:
+
+```json
+{
+  "detail": {
+    "error": "incident_history_unavailable",
+    "message": "Incident history is temporarily unavailable."
+  }
+}
+```
+
 ## Current Runtime Behavior
 
 The API currently supports both mock and Gemini classifier providers.
