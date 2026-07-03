@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.api.routes_health import router as health_router
 from app.api.routes_incidents import router as incidents_router
 from app.config import settings
+from app.middleware import RequestTracingMiddleware
 from app.utils.logging import configure_logging
 
 # Configure logging before the application starts handling requests.
@@ -21,6 +22,10 @@ app = FastAPI(
         "results on Google Cloud for operational analysis."
     ),
 )
+
+# Request tracing adds X-Request-ID to every response and makes debugging easier
+# when inspecting logs locally or in Cloud Logging.
+app.add_middleware(RequestTracingMiddleware)
 
 # Routers are registered here so main.py stays as the application entry point,
 # while endpoint definitions remain organized in dedicated route modules.
