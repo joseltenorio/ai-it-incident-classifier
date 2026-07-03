@@ -5,6 +5,11 @@ from fastapi import FastAPI
 from app.api.routes_health import router as health_router
 from app.api.routes_incidents import router as incidents_router
 from app.config import settings
+from app.utils.logging import configure_logging
+
+# Configure logging before the application starts handling requests.
+# Cloud Run will capture these logs from stdout.
+configure_logging()
 
 # FastAPI creates the ASGI application object used by Uvicorn.
 # The metadata below is also displayed in the automatic /docs page.
