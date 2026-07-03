@@ -124,6 +124,46 @@ class IncidentResponse(IncidentClassification):
     created_at: datetime
 
 
+class IncidentHistoryItem(BaseModel):
+    """Compact incident record returned by the history listing endpoint."""
+
+    incident_id: str
+    title: str
+    category: IncidentCategory
+    priority: IncidentPriority
+    responsible_area: ResponsibleArea
+    confidence_level: ConfidenceLevel
+    needs_human_review: bool
+    model_name: str
+    created_at: datetime
+
+
+class IncidentDetailResponse(BaseModel):
+    """Detailed incident record returned by the incident lookup endpoint.
+
+    The raw model response is intentionally not exposed by the public API.
+    It remains stored in BigQuery for audit and troubleshooting.
+    """
+
+    incident_id: str
+    title: str
+    description: str
+    reported_by: str | None
+    source_channel: SourceChannel
+
+    category: IncidentCategory
+    priority: IncidentPriority
+    responsible_area: ResponsibleArea
+    summary: str
+    suggested_action: str
+    confidence_level: ConfidenceLevel
+    needs_human_review: bool
+
+    model_name: str
+    model_latency_ms: int
+    created_at: datetime
+
+
 class ErrorResponse(BaseModel):
     """Standard error response used by the API."""
 
