@@ -3,7 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Query, status
 
 from app.config import settings
 from app.schemas import (
@@ -27,6 +27,10 @@ from app.services.incident_history_mapper import (
 )
 from app.services.incident_id_generator import generate_incident_id
 from app.services.incident_record_mapper import build_incident_record
+from app.utils.api_errors import (
+    incident_history_unavailable_error,
+    incident_not_found_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,17 @@ def classify_incident_endpoint(request: IncidentRequest) -> IncidentResponse:
                 exc,
             )
 
+    logger.info(
+        "Incident classified",
+        extra={
+            "incident_id": incident_id,
+            "category": classification.category.value,
+            "priority": classification.priority.value,
+            "responsible_area": classification.responsible_area.value,
+            "model_name": model_name,
+        },
+    )
+
     return IncidentResponse(
         incident_id=incident_id,
         model_name=model_name,
@@ -107,13 +122,7 @@ def list_incidents_endpoint(
         records = list_recent_incident_classifications(limit=limit)
     except BigQueryRepositoryError as exc:
         logger.warning("Incident history could not be queried: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "error": "incident_history_unavailable",
-                "message": "Incident history is temporarily unavailable.",
-            },
-        ) from exc
+        raise incident_history_unavailable_error() from exc
 
     return [build_incident_history_item(record) for record in records]
 
@@ -135,21 +144,9 @@ def get_incident_endpoint(incident_id: str) -> IncidentDetailResponse:
         record = get_incident_classification_by_id(incident_id)
     except BigQueryRepositoryError as exc:
         logger.warning("Incident detail could not be queried: %s", exc)
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={
-                "error": "incident_history_unavailable",
-                "message": "Incident history is temporarily unavailable.",
-            },
-        ) from exc
+        raise incident_history_unavailable_error() from exc
 
     if record is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail={
-                "error": "incident_not_found",
-                "message": "No incident was found for the provided incident_id.",
-            },
-        )
+        raise incident_not_found_error()
 
     return build_incident_detail_response(record)
