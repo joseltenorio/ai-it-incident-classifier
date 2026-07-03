@@ -191,4 +191,20 @@ The mock provider is used by default for deterministic local development and aut
 
 The Gemini provider can be enabled by setting `CLASSIFIER_PROVIDER=gemini` and configuring a valid `GEMINI_API_KEY`.
 
-BigQuery persistence is not implemented yet. Classification results are returned by the API but are not stored until the BigQuery persistence layer is added.
+BigQuery persistence is implemented and controlled through:
+
+```env
+ENABLE_BIGQUERY_PERSISTENCE=true
+```
+
+When persistence is disabled, the API returns the classification response without storing the result.
+
+When persistence is enabled, the API attempts to store each classified incident in BigQuery using the configured project, dataset and table:
+
+```env
+GOOGLE_CLOUD_PROJECT=your-google-cloud-project-id
+BIGQUERY_DATASET=ai_operations
+BIGQUERY_TABLE=incident_classifications
+```
+
+If BigQuery persistence fails, the API still returns the classification response and logs a warning. This keeps the classification flow available while preserving the persistence error for troubleshooting.

@@ -46,7 +46,7 @@ BigQuery Persistence
 Operational Analysis
 ```
 
-BigQuery persistence is part of the planned cloud storage layer. The current backend already prepares structured incident classification responses that will later be stored for traceability and operational analysis.
+BigQuery persistence is available as an optional storage layer. When `ENABLE_BIGQUERY_PERSISTENCE=true`, classified incidents are stored in BigQuery for traceability and operational analysis.
 
 ## Core Capabilities
 
@@ -414,7 +414,7 @@ The current implementation includes:
 - `POST /incidents/classify`.
 - Automated tests for the current backend behavior.
 
-BigQuery persistence, incident history queries, Docker and Cloud Run deployment are planned for later project stages.
+Incident history queries, Docker and Cloud Run deployment are planned for later project stages.
 
 ## Portfolio Scope
 
