@@ -3,15 +3,28 @@
 import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.config import settings
-from app.schemas import IncidentRequest, IncidentResponse
+from app.schemas import (
+    ErrorResponse,
+    IncidentDetailResponse,
+    IncidentHistoryItem,
+    IncidentRequest,
+    IncidentResponse,
+)
 from app.services.bigquery_repository import (
     BigQueryPersistenceError,
+    BigQueryRepositoryError,
+    get_incident_classification_by_id,
     insert_incident_classification,
+    list_recent_incident_classifications,
 )
 from app.services.incident_classifier import classify_incident
+from app.services.incident_history_mapper import (
+    build_incident_detail_response,
+    build_incident_history_item,
+)
 from app.services.incident_id_generator import generate_incident_id
 from app.services.incident_record_mapper import build_incident_record
 
@@ -69,3 +82,74 @@ def classify_incident_endpoint(request: IncidentRequest) -> IncidentResponse:
         created_at=created_at,
         **classification.model_dump(),
     )
+
+
+@router.get(
+    "",
+    response_model=list[IncidentHistoryItem],
+    status_code=status.HTTP_200_OK,
+    summary="List recent classified incidents",
+    responses={
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
+    },
+)
+def list_incidents_endpoint(
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=100,
+        description="Maximum number of recent incidents to return.",
+    ),
+) -> list[IncidentHistoryItem]:
+    """Return recent classified incidents stored in BigQuery."""
+
+    try:
+        records = list_recent_incident_classifications(limit=limit)
+    except BigQueryRepositoryError as exc:
+        logger.warning("Incident history could not be queried: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "incident_history_unavailable",
+                "message": "Incident history is temporarily unavailable.",
+            },
+        ) from exc
+
+    return [build_incident_history_item(record) for record in records]
+
+
+@router.get(
+    "/{incident_id}",
+    response_model=IncidentDetailResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get classified incident detail",
+    responses={
+        status.HTTP_404_NOT_FOUND: {"model": ErrorResponse},
+        status.HTTP_503_SERVICE_UNAVAILABLE: {"model": ErrorResponse},
+    },
+)
+def get_incident_endpoint(incident_id: str) -> IncidentDetailResponse:
+    """Return one classified incident by its incident ID."""
+
+    try:
+        record = get_incident_classification_by_id(incident_id)
+    except BigQueryRepositoryError as exc:
+        logger.warning("Incident detail could not be queried: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "incident_history_unavailable",
+                "message": "Incident history is temporarily unavailable.",
+            },
+        ) from exc
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "error": "incident_not_found",
+                "message": "No incident was found for the provided incident_id.",
+            },
+        )
+
+    return build_incident_detail_response(record)
