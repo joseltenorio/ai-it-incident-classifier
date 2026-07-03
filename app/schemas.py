@@ -164,6 +164,16 @@ class IncidentDetailResponse(BaseModel):
     created_at: datetime
 
 
+class RuntimeReadinessResponse(BaseModel):
+    """Readiness response generated from runtime configuration checks."""
+
+    status: str
+    environment: str
+    classifier_provider: str
+    bigquery_persistence_enabled: bool
+    checks: dict[str, str]
+
+
 class ErrorResponse(BaseModel):
     """Standard error response used by the API."""
 

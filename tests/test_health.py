@@ -28,3 +28,19 @@ def test_health_endpoint_returns_healthy_status() -> None:
 
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+def test_ready_endpoint_returns_runtime_readiness() -> None:
+    """Verify that the readiness endpoint exposes runtime configuration status."""
+
+    response = client.get("/ready")
+
+    assert response.status_code in {200, 503}
+
+    payload = response.json()
+
+    assert payload["status"] in {"ready", "not_ready"}
+    assert "environment" in payload
+    assert "classifier_provider" in payload
+    assert "bigquery_persistence_enabled" in payload
+    assert "checks" in payload
