@@ -367,6 +367,71 @@ The API logs request completion with the current request ID, making it easier to
 
 See [`docs/runtime_observability.md`](docs/runtime_observability.md) for more details.
 
+## Docker
+
+The backend can run as a Docker container.
+
+Build the image:
+
+```bash
+docker build -t ai-it-incident-classifier-api:local .
+```
+
+Run with the mock classifier:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e ENVIRONMENT=local \
+  -e CLASSIFIER_PROVIDER=mock \
+  -e ENABLE_BIGQUERY_PERSISTENCE=false \
+  -e GEMINI_MODEL=gemini-2.5-flash \
+  ai-it-incident-classifier-api:local
+```
+
+See [`docs/docker_local.md`](docs/docker_local.md) for local Docker execution details.
+
+## Cloud Run Deployment
+
+The backend is designed to run on Cloud Run as a containerized FastAPI service.
+
+Deployment uses:
+
+- Docker
+- Artifact Registry
+- Cloud Build
+- Cloud Run
+- BigQuery
+- Runtime environment variables
+
+See [`docs/cloud_run_deployment.md`](docs/cloud_run_deployment.md) for deployment instructions.
+
+## Runtime Environment
+
+Runtime behavior is controlled through environment variables.
+
+Important variables include:
+
+- `CLASSIFIER_PROVIDER`
+- `ENABLE_BIGQUERY_PERSISTENCE`
+- `GOOGLE_CLOUD_PROJECT`
+- `BIGQUERY_DATASET`
+- `BIGQUERY_TABLE`
+- `GEMINI_MODEL`
+- `GEMINI_API_KEY`
+
+See [`docs/runtime_environment.md`](docs/runtime_environment.md) for the full environment variable reference.
+
+## Cloud IAM and Validation
+
+Cloud Run requires a runtime service account with permissions to insert and query BigQuery records.
+
+Recommended roles for this project:
+
+- `roles/bigquery.jobUser`
+- `roles/bigquery.dataEditor`
+
+See [`docs/cloud_iam_and_validation.md`](docs/cloud_iam_and_validation.md) for IAM setup and deployment validation checks.
+
 ## Environment Variables
 
 The project uses environment-based configuration.
