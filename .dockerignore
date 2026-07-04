@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment files
+.env
+.env.local
+
+# Test and development files
+tests/
+requirements-dev.txt
+
+# Documentation and local assets
+docs/
+postman/
+sql/
+README.md
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# OS and IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Repomix generated outputs
+repomix-output.*
+ai-it-incident-classifier.*
+.repomix-cache/
+repomix.config.json
+
+# Frontend dependencies
+node_modules/
