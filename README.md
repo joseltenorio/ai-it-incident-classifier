@@ -63,6 +63,8 @@ BigQuery persistence is available as an optional storage layer. When `ENABLE_BIG
 - Exposes health endpoints for local and cloud runtime validation.
 - Provides automated tests for API health checks, payload validation and classification contract behavior.
 - Provides BigQuery-backed incident history and detail lookup endpoints.
+- Adds request tracing with `X-Request-ID` response headers.
+- Exposes readiness checks for runtime configuration validation.
 
 ## Classification Contract
 
@@ -138,6 +140,7 @@ The `confidence_level` field is qualitative. It is not intended to represent a s
 ```text
 GET  /
 GET  /health
+GET  /ready
 POST /incidents/classify
 GET  /incidents
 GET  /incidents/{incident_id}
@@ -168,6 +171,30 @@ Example response:
   "status": "healthy"
 }
 ```
+
+### `GET /ready`
+
+Returns runtime readiness based on configuration checks.
+
+Example response:
+
+```json
+{
+  "status": "ready",
+  "environment": "local",
+  "classifier_provider": "mock",
+  "bigquery_persistence_enabled": false,
+  "checks": {
+    "gemini_api_key": "not_required",
+    "google_cloud_project": "not_required",
+    "bigquery_table_id": "not_required"
+  }
+}
+```
+
+`GET /health` verifies that the API process is alive.
+
+`GET /ready` verifies whether required runtime settings are present for the selected classifier provider and BigQuery persistence mode.
 
 ### `POST /incidents/classify`
 
@@ -311,6 +338,35 @@ BIGQUERY_TABLE=incident_classifications
 
 See [`docs/api_contract.md`](docs/api_contract.md) for request and response examples.
 
+## Runtime Observability
+
+The backend includes basic runtime hardening for local and cloud execution:
+
+- Structured application logging.
+- Request tracing middleware.
+- `X-Request-ID` response headers.
+- Centralized API error helpers.
+- Health endpoint: `GET /health`.
+- Readiness endpoint: `GET /ready`.
+
+Every HTTP response includes an `X-Request-ID` header.
+
+If the client sends an existing `X-Request-ID`, the API preserves it. If the client does not send one, the API generates a new request ID.
+
+Example header:
+
+```text
+X-Request-ID: 7f31c1b8-2d5f-4d39-ae1f-24d3b70cfd0e
+```
+
+The API logs request completion with the current request ID, making it easier to correlate responses with local logs or Cloud Logging entries.
+
+`GET /health` verifies that the API process is alive.
+
+`GET /ready` validates runtime configuration for the selected classifier provider and BigQuery persistence settings.
+
+See [`docs/runtime_observability.md`](docs/runtime_observability.md) for more details.
+
 ## Environment Variables
 
 The project uses environment-based configuration.
@@ -321,6 +377,7 @@ APP_VERSION=0.1.0
 ENVIRONMENT=local
 
 CLASSIFIER_PROVIDER=mock
+ENABLE_BIGQUERY_PERSISTENCE=false
 
 GOOGLE_CLOUD_PROJECT=your-google-cloud-project-id
 BIGQUERY_DATASET=ai_operations
@@ -349,9 +406,10 @@ Real secrets such as API keys must be configured locally or as cloud runtime env
 ```text
 app/
   api/          API route modules
-  core/         Domain catalogs, validation rules and classification utilities
+  core/         Domain catalogs, validation rules and runtime checks
   services/     Classifier, incident ID and cloud service integrations
   utils/        Shared runtime utilities
+  middleware.py Request tracing middleware
 
 tests/          Automated test suite
 docs/           Technical documentation
@@ -413,7 +471,7 @@ python -m pytest
 
 The test suite covers:
 
-- Root and health endpoints.
+- Root, health and readiness endpoints.
 - Incident request payload validation.
 - Controlled classification catalogs.
 - Incident ID generation.
@@ -422,13 +480,15 @@ The test suite covers:
 - Prompt construction for Gemini.
 - Classifier provider selection.
 - Classification endpoint behavior.
+- BigQuery record mapping and incident history responses.
+- Request tracing and readiness behavior.
 
 ## Current Implementation
 
 The current implementation includes:
 
 - FastAPI application setup.
-- Root and health endpoints.
+- Root, health and readiness endpoints.
 - Environment-based configuration.
 - Typed incident request and response schemas.
 - Controlled classification catalogs.
@@ -443,6 +503,10 @@ The current implementation includes:
 - `GET /incidents`.
 - `GET /incidents/{incident_id}`.
 - BigQuery-backed incident history queries.
+- Structured application logging.
+- Request tracing middleware with `X-Request-ID` response headers.
+- Centralized API error helpers.
+- Runtime readiness checks.
 - Automated tests for the current backend behavior.
 
 Docker and Cloud Run deployment are planned for later project stages.
