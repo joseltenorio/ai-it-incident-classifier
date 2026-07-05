@@ -1,6 +1,7 @@
 # app/services/gemini_classifier.py
 
 import logging
+import re
 from time import perf_counter, sleep
 from typing import Any
 
@@ -40,8 +41,6 @@ def classify_incident_with_gemini(
 
     prompt = build_incident_classification_prompt(request)
 
-    # SDK-level retries are disabled so we control exactly which failures are
-    # retried. This prevents accidental repeated calls for non-transient errors.
     client = genai.Client(
         api_key=settings.gemini_api_key,
         http_options=types.HttpOptions(
@@ -95,21 +94,23 @@ def _generate_content_with_retries(
                 ),
             )
         except errors.APIError as exc:
-            status_code = getattr(exc, "status_code", None)
+            status_code = _extract_gemini_status_code(exc)
             last_error = exc
 
             if status_code not in TRANSIENT_GEMINI_STATUS_CODES:
                 logger.error(
-                    "Gemini API failed with non-retryable status %s.",
+                    "Gemini API failed with non-retryable status %s. Error: %s",
                     status_code,
+                    exc,
                 )
                 raise
 
             if attempt == max_attempts:
                 logger.error(
-                    "Gemini API failed after %s attempts with status %s.",
+                    "Gemini API failed after %s attempts with status %s. Error: %s",
                     max_attempts,
                     status_code,
+                    exc,
                 )
                 raise
 
@@ -125,6 +126,37 @@ def _generate_content_with_retries(
             sleep(wait_seconds)
 
     raise GeminiClassifierError(f"Gemini API request failed: {last_error}")
+
+
+def _extract_gemini_status_code(exc: Exception) -> int | None:
+    """Extract an HTTP status code from a Gemini SDK exception.
+
+    Different SDK exceptions may expose the status as status_code, code,
+    response.status_code or only inside the string representation.
+    """
+
+    status_code = getattr(exc, "status_code", None)
+
+    if isinstance(status_code, int):
+        return status_code
+
+    code = getattr(exc, "code", None)
+
+    if isinstance(code, int):
+        return code
+
+    response = getattr(exc, "response", None)
+    response_status = getattr(response, "status_code", None)
+
+    if isinstance(response_status, int):
+        return response_status
+
+    match = re.search(r"\b(400|401|403|404|429|500|503|504)\b", str(exc))
+
+    if match:
+        return int(match.group(1))
+
+    return None
 
 
 def _extract_output_text(response: Any) -> str:
