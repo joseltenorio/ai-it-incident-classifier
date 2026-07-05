@@ -1,0 +1,1655 @@
+{
+  "info": {
+    "_postman_id": "33889832-945d-4cd9-9f24-6274c3914ce9",
+    "name": "AI IT Incident Classifier - Cloud Validation",
+    "description": "Postman collection for validating the AI IT Incident Classifier API deployed on Cloud Run.\n\nThe collection uses variables for the Cloud Run base URL, reusable incident payloads and dynamic incident IDs. It validates runtime endpoints, classification contracts, request validation errors and BigQuery-backed incident history endpoints.\n\nRecommended mode for routine validation: CLASSIFIER_PROVIDER=mock on Cloud Run to avoid unnecessary Gemini API usage. Gemini can be validated separately with a small number of requests after switching the Cloud Run service to CLASSIFIER_PROVIDER=gemini.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Runtime",
+      "description": "Runtime checks for the deployed Cloud Run service.",
+      "item": [
+        {
+          "name": "GET Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": []
+            },
+            "description": "Returns service metadata."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Root exposes service metadata\", function () {",
+                  "    pm.expect(response.service).to.exist;",
+                  "    pm.expect(response.status).to.eql(\"running\");",
+                  "    pm.expect(response.version).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness check for Cloud Run and local runtime."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Health response is healthy\", function () {",
+                  "    pm.expect(pm.response.json()).to.eql({ status: \"healthy\" });",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Ready",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": "Readiness check based on runtime configuration."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Readiness response has expected structure\", function () {",
+                  "    pm.expect(response.status).to.eql(\"ready\");",
+                  "    pm.expect(response.environment).to.exist;",
+                  "    pm.expect(response.classifier_provider).to.be.oneOf([\"mock\", \"gemini\"]);",
+                  "    pm.expect(response.bigquery_persistence_enabled).to.be.a(\"boolean\");",
+                  "    pm.expect(response.checks).to.be.an(\"object\");",
+                  "});",
+                  "",
+                  "pm.test(\"BigQuery runtime is configured\", function () {",
+                  "    pm.expect(response.checks.google_cloud_project).to.eql(\"configured\");",
+                  "    pm.expect(response.checks.bigquery_table_id).to.eql(\"configured\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"classifier_provider\", response.classifier_provider);",
+                  "pm.environment.set(\"classifier_provider\", response.classifier_provider);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 Classification - Valid Cases",
+      "description": "Valid incident classification cases. These requests store incident_id for history detail tests.",
+      "item": [
+        {
+          "name": "POST Classify VPN Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies a VPN connectivity incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{vpn_title}}\",\n  \"description\": \"{{vpn_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: VPN\", function () {",
+                  "        pm.expect(response.category).to.eql(\"VPN\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Access Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies an access/authorization incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{access_title}}\",\n  \"description\": \"{{access_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: Accesos\", function () {",
+                  "        pm.expect(response.category).to.eql(\"Accesos\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Security Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies a security incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{security_title}}\",\n  \"description\": \"{{security_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: Seguridad\", function () {",
+                  "        pm.expect(response.category).to.eql(\"Seguridad\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Cloud Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies a cloud infrastructure incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{cloud_title}}\",\n  \"description\": \"{{cloud_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: Cloud\", function () {",
+                  "        pm.expect(response.category).to.eql(\"Cloud\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Database Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies a database incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{database_title}}\",\n  \"description\": \"{{database_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: Base de datos\", function () {",
+                  "        pm.expect(response.category).to.eql(\"Base de datos\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Application Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Classifies an application incident.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{application_title}}\",\n  \"description\": \"{{application_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "if (response.model_name && response.model_name.endsWith(\"-mock\")) {",
+                  "    pm.test(\"Mock classifier returns expected category: Aplicaciones\", function () {",
+                  "        pm.expect(response.category).to.eql(\"Aplicaciones\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 Classification - Validation Errors",
+      "description": "Invalid payload cases. These should be rejected by FastAPI/Pydantic validation.",
+      "item": [
+        {
+          "name": "POST Missing Title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects a payload without title.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"{{vpn_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Missing Description",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects a payload without description.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{vpn_title}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Short Title",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects a title shorter than the API contract allows.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"VPN\",\n  \"description\": \"{{vpn_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Short Description",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects a short description.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{vpn_title}}\",\n  \"description\": \"Error\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Invalid Email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects an invalid reported_by email.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{vpn_title}}\",\n  \"description\": \"{{vpn_description}}\",\n  \"reported_by\": \"not-an-email\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Invalid Source Channel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Rejects unsupported source_channel values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{vpn_title}}\",\n  \"description\": \"{{vpn_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"fax\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Validation error returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Validation error contains detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 Incident History",
+      "description": "BigQuery-backed incident history API checks.",
+      "item": [
+        {
+          "name": "GET Recent Incidents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ]
+            },
+            "description": "Returns recent incident classifications stored in BigQuery."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response is an array\", function () {",
+                  "    pm.expect(response).to.be.an(\"array\");",
+                  "});",
+                  "",
+                  "pm.test(\"Incident history items have compact contract\", function () {",
+                  "    if (response.length === 0) {",
+                  "        return;",
+                  "    }",
+                  "    const item = response[0];",
+                  "    pm.expect(item.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(item.title).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(item.category).to.exist;",
+                  "    pm.expect(item.priority).to.exist;",
+                  "    pm.expect(item.responsible_area).to.exist;",
+                  "    pm.expect(item.confidence_level).to.exist;",
+                  "    pm.expect(item.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(item.model_name).to.exist;",
+                  "    pm.expect(item.created_at).to.exist;",
+                  "});",
+                  "",
+                  "if (response.length > 0) {",
+                  "    pm.collectionVariables.set(\"incident_id\", response[0].incident_id);",
+                  "    pm.environment.set(\"incident_id\", response[0].incident_id);",
+                  "}",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Recent Incidents With Limit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents?limit=3",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "3"
+                }
+              ]
+            },
+            "description": "Returns at most 3 recent incident classifications."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Response respects limit\", function () {",
+                  "    pm.expect(response).to.be.an(\"array\");",
+                  "    pm.expect(response.length).to.be.at.most(3);",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Incident Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/{{incident_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{incident_id}}"
+              ]
+            },
+            "description": "Returns detail for the incident_id captured from a previous request."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Incident detail response has full contract\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(response.title).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.description).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.source_channel).to.exist;",
+                  "    pm.expect(response.category).to.exist;",
+                  "    pm.expect(response.priority).to.exist;",
+                  "    pm.expect(response.responsible_area).to.exist;",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.confidence_level).to.exist;",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.exist;",
+                  "    pm.expect(response.model_latency_ms).to.be.a(\"number\");",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Unknown Incident",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/{{unknown_incident_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{unknown_incident_id}}"
+              ]
+            },
+            "description": "Returns 404 for a non-existing incident_id."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Unknown incident returns 404\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Error response contains incident_not_found detail\", function () {",
+                  "    pm.expect(response.detail).to.exist;",
+                  "    pm.expect(response.detail.error).to.eql(\"incident_not_found\");",
+                  "    pm.expect(response.detail.message).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Invalid Limit",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents?limit=0",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "0"
+                }
+              ]
+            },
+            "description": "Returns validation error for an invalid limit."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Invalid limit returns 422\", function () {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test(\"Validation response contains detail\", function () {",
+                  "    pm.expect(pm.response.json().detail).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 Cloud Evidence",
+      "description": "Requests intended for portfolio screenshots and final manual validation.",
+      "item": [
+        {
+          "name": "GET Ready Cloud Runtime",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/ready",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "ready"
+              ]
+            },
+            "description": "Screenshot-friendly readiness check."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Readiness response has expected structure\", function () {",
+                  "    pm.expect(response.status).to.eql(\"ready\");",
+                  "    pm.expect(response.environment).to.exist;",
+                  "    pm.expect(response.classifier_provider).to.be.oneOf([\"mock\", \"gemini\"]);",
+                  "    pm.expect(response.bigquery_persistence_enabled).to.be.a(\"boolean\");",
+                  "    pm.expect(response.checks).to.be.an(\"object\");",
+                  "});",
+                  "",
+                  "pm.test(\"BigQuery runtime is configured\", function () {",
+                  "    pm.expect(response.checks.google_cloud_project).to.eql(\"configured\");",
+                  "    pm.expect(response.checks.bigquery_table_id).to.eql(\"configured\");",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"classifier_provider\", response.classifier_provider);",
+                  "pm.environment.set(\"classifier_provider\", response.classifier_provider);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST Classify Portfolio Demo Incident",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/incidents/classify",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "classify"
+              ]
+            },
+            "description": "Creates a portfolio demo incident and stores portfolio_incident_id.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{portfolio_demo_title}}\",\n  \"description\": \"{{portfolio_demo_description}}\",\n  \"reported_by\": \"{{reported_by}}\",\n  \"source_channel\": \"{{source_channel}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "const allowedCategories = [\"Hardware\", \"Software\", \"Red\", \"VPN\", \"Accesos\", \"Seguridad\", \"Cloud\", \"Base de datos\", \"Aplicaciones\", \"Otro\"];",
+                  "const allowedPriorities = [\"Baja\", \"Media\", \"Alta\", \"Crítica\"];",
+                  "const allowedAreas = [\"Soporte TI\", \"Infraestructura\", \"Aplicaciones\", \"Seguridad\", \"Datos\", \"Cloud\"];",
+                  "const allowedConfidence = [\"Baja\", \"Media\", \"Alta\"];",
+                  "",
+                  "pm.test(\"Response contains classification contract fields\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(allowedCategories).to.include(response.category);",
+                  "    pm.expect(allowedPriorities).to.include(response.priority);",
+                  "    pm.expect(allowedAreas).to.include(response.responsible_area);",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(allowedConfidence).to.include(response.confidence_level);",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Model metadata identifies active classifier\", function () {",
+                  "    pm.expect(response.model_name).to.match(/-(mock|gemini)$/);",
+                  "});",
+                  "",
+                  "pm.collectionVariables.set(\"incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_incident_id\", response.incident_id);",
+                  "pm.collectionVariables.set(\"last_model_name\", response.model_name);",
+                  "pm.collectionVariables.set(\"last_category\", response.category);",
+                  "pm.environment.set(\"incident_id\", response.incident_id);",
+                  "pm.environment.set(\"last_incident_id\", response.incident_id);",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});",
+                  "",
+                  "",
+                  "pm.collectionVariables.set(\"portfolio_incident_id\", response.incident_id);",
+                  "pm.environment.set(\"portfolio_incident_id\", response.incident_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET Portfolio Demo Incident Detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/incidents/{{portfolio_incident_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "incidents",
+                "{{portfolio_incident_id}}"
+              ]
+            },
+            "description": "Returns detail for the portfolio demo incident."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "const response = pm.response.json();",
+                  "",
+                  "pm.test(\"Incident detail response has full contract\", function () {",
+                  "    pm.expect(response.incident_id).to.match(/^INC-\\d{8}-[A-F0-9]{8}$/);",
+                  "    pm.expect(response.title).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.description).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.source_channel).to.exist;",
+                  "    pm.expect(response.category).to.exist;",
+                  "    pm.expect(response.priority).to.exist;",
+                  "    pm.expect(response.responsible_area).to.exist;",
+                  "    pm.expect(response.summary).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.suggested_action).to.be.a(\"string\").and.not.empty;",
+                  "    pm.expect(response.confidence_level).to.exist;",
+                  "    pm.expect(response.needs_human_review).to.be.a(\"boolean\");",
+                  "    pm.expect(response.model_name).to.exist;",
+                  "    pm.expect(response.model_latency_ms).to.be.a(\"number\");",
+                  "    pm.expect(response.created_at).to.exist;",
+                  "});",
+                  "",
+                  "pm.test(\"Response includes X-Request-ID\", function () {",
+                  "    pm.expect(pm.response.headers.get(\"x-request-id\") || pm.response.headers.get(\"X-Request-ID\")).to.exist;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://ai-it-incident-classifier-api-n4pjkcgowq-uc.a.run.app",
+      "type": "string"
+    },
+    {
+      "key": "classifier_provider",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "incident_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "last_incident_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "portfolio_incident_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "unknown_incident_id",
+      "value": "INC-20990101-UNKNOWN1",
+      "type": "string"
+    },
+    {
+      "key": "reported_by",
+      "value": "usuario.demo@empresa.com",
+      "type": "string"
+    },
+    {
+      "key": "source_channel",
+      "value": "api",
+      "type": "string"
+    },
+    {
+      "key": "vpn_title",
+      "value": "No puedo conectarme a la VPN",
+      "type": "string"
+    },
+    {
+      "key": "vpn_description",
+      "value": "Desde ayer intento conectarme a la VPN de la empresa, pero aparece error de autenticación.",
+      "type": "string"
+    },
+    {
+      "key": "access_title",
+      "value": "Error 403 al ingresar al panel administrativo",
+      "type": "string"
+    },
+    {
+      "key": "access_description",
+      "value": "Después del login aparece un error 403 forbidden al intentar ingresar al panel administrativo.",
+      "type": "string"
+    },
+    {
+      "key": "security_title",
+      "value": "Alerta de posible acceso no autorizado",
+      "type": "string"
+    },
+    {
+      "key": "security_description",
+      "value": "Se detectaron múltiples intentos fallidos de inicio de sesión desde una IP desconocida.",
+      "type": "string"
+    },
+    {
+      "key": "cloud_title",
+      "value": "Servicio Cloud Run no responde",
+      "type": "string"
+    },
+    {
+      "key": "cloud_description",
+      "value": "El servicio desplegado en Cloud Run devuelve errores 503 intermitentes durante las pruebas.",
+      "type": "string"
+    },
+    {
+      "key": "database_title",
+      "value": "Consulta a base de datos muy lenta",
+      "type": "string"
+    },
+    {
+      "key": "database_description",
+      "value": "Los reportes tardan demasiado porque las consultas a la base de datos presentan alta latencia.",
+      "type": "string"
+    },
+    {
+      "key": "application_title",
+      "value": "La aplicación web muestra error 500",
+      "type": "string"
+    },
+    {
+      "key": "application_description",
+      "value": "Al guardar cambios en el módulo principal, la aplicación web devuelve error 500.",
+      "type": "string"
+    },
+    {
+      "key": "portfolio_demo_title",
+      "value": "Usuario no puede acceder al panel administrativo",
+      "type": "string"
+    },
+    {
+      "key": "portfolio_demo_description",
+      "value": "El usuario puede iniciar sesión, pero al abrir el panel administrativo recibe un error de permisos.",
+      "type": "string"
+    }
+  ]
+}
