@@ -12,7 +12,7 @@ The project demonstrates a practical Cloud, Infrastructure and AI automation use
 
 ## Use Case
 
-Support teams often receive incidents that must be manually reviewed before they can be assigned to the correct area.
+Support teams often receive incidents that must be manually reviewed before they can be assigned to the correct technical area.
 
 Examples:
 
@@ -29,7 +29,9 @@ This application automates the first analysis step by producing a structured inc
 ## Architecture
 
 ```text
-Client / Postman / Frontend
+Client / Postman / Future Frontend
+        ↓
+Cloud Run
         ↓
 FastAPI Backend
         ↓
@@ -43,28 +45,54 @@ Structured Response Validation
         ↓
 BigQuery Persistence
         ↓
-Operational Analysis
+Incident History API
 ```
 
 BigQuery persistence is available as an optional storage layer. When `ENABLE_BIGQUERY_PERSISTENCE=true`, classified incidents are stored in BigQuery for traceability and operational analysis.
+
+## Cloud Architecture
+
+```text
+Developer Workstation
+        ↓
+Cloud Build
+        ↓
+Artifact Registry
+        ↓
+Cloud Run Service
+        ↓
+BigQuery
+        ↓
+Cloud Logging
+```
+
+The Cloud Run deployment uses:
+
+- Docker container image.
+- Artifact Registry repository.
+- Cloud Build image build.
+- Runtime service account.
+- BigQuery dataset and table.
+- Secret Manager for Gemini API key access.
+- Environment variables for provider selection and persistence settings.
 
 ## Core Capabilities
 
 - Receives IT support incidents through a REST API.
 - Validates request payloads with typed Pydantic schemas.
 - Classifies incidents using controlled categories, priorities and responsible areas.
-- Supports a deterministic mock classifier for local development and automated tests.
+- Supports a deterministic mock classifier for local development, automated tests and quota-safe cloud validation.
 - Supports Gemini API as the generative AI classifier provider.
 - Builds controlled prompts using classification catalogs and triage rules.
 - Validates structured classifier outputs before returning API responses.
 - Generates a technical summary and suggested first action.
 - Flags ambiguous or low-confidence incidents for human review.
 - Generates stable incident identifiers for traceability.
-- Exposes health endpoints for local and cloud runtime validation.
-- Provides automated tests for API health checks, payload validation and classification contract behavior.
+- Persists classification records in BigQuery.
 - Provides BigQuery-backed incident history and detail lookup endpoints.
 - Adds request tracing with `X-Request-ID` response headers.
-- Exposes readiness checks for runtime configuration validation.
+- Exposes health and readiness endpoints for local and cloud runtime validation.
+- Includes a Postman Cloud Validation Suite for deployed API testing.
 
 ## Classification Contract
 
@@ -72,16 +100,16 @@ The classifier returns a structured response with the following fields:
 
 ```json
 {
-  "incident_id": "INC-20260629-A3F91C2B",
-  "category": "VPN",
+  "incident_id": "INC-20260705-D0E67AF9",
+  "category": "Accesos",
   "priority": "Media",
-  "responsible_area": "Infraestructura",
-  "summary": "The incident was classified as VPN based on the provided title and description.",
-  "suggested_action": "Validate user credentials, account status, VPN client configuration and VPN service logs.",
-  "confidence_level": "Media",
+  "responsible_area": "Aplicaciones",
+  "summary": "The user cannot access the administrative panel because a 403 forbidden error appears after login.",
+  "suggested_action": "Review user permissions, assigned roles and recent authorization changes in the application.",
+  "confidence_level": "Alta",
   "needs_human_review": false,
-  "model_name": "gemini-2.5-flash-mock",
-  "created_at": "2026-06-29T10:30:00Z"
+  "model_name": "gemini-2.5-flash-lite-gemini",
+  "created_at": "2026-07-05T15:05:21Z"
 }
 ```
 
@@ -181,13 +209,13 @@ Example response:
 ```json
 {
   "status": "ready",
-  "environment": "local",
+  "environment": "cloud",
   "classifier_provider": "mock",
-  "bigquery_persistence_enabled": false,
+  "bigquery_persistence_enabled": true,
   "checks": {
     "gemini_api_key": "not_required",
-    "google_cloud_project": "not_required",
-    "bigquery_table_id": "not_required"
+    "google_cloud_project": "configured",
+    "bigquery_table_id": "configured"
   }
 }
 ```
@@ -215,7 +243,7 @@ Example response:
 
 ```json
 {
-  "incident_id": "INC-20260629-A3F91C2B",
+  "incident_id": "INC-20260704-E0DEA5EB",
   "category": "VPN",
   "priority": "Media",
   "responsible_area": "Infraestructura",
@@ -224,7 +252,7 @@ Example response:
   "confidence_level": "Media",
   "needs_human_review": false,
   "model_name": "gemini-2.5-flash-mock",
-  "created_at": "2026-06-29T10:30:00Z"
+  "created_at": "2026-07-04T23:44:43Z"
 }
 ```
 
@@ -250,9 +278,8 @@ It is used for:
 - Automated tests.
 - Local contract validation.
 - Development without external API calls.
-- Running the API without secrets.
-
-The mock classifier keeps the backend predictable while the API contract, validation layer and documentation evolve.
+- Running cloud validation without consuming Gemini quota.
+- API smoke testing after deployment.
 
 ### `gemini`
 
@@ -275,10 +302,10 @@ Gemini responses are validated against the same controlled classification contra
 
 The model must return only supported values for:
 
-- Category
-- Priority
-- Responsible area
-- Confidence level
+- Category.
+- Priority.
+- Responsible area.
+- Confidence level.
 
 If the model response is invalid, incomplete or unavailable, the backend returns a safe fallback classification marked for human review.
 
@@ -361,10 +388,6 @@ X-Request-ID: 7f31c1b8-2d5f-4d39-ae1f-24d3b70cfd0e
 
 The API logs request completion with the current request ID, making it easier to correlate responses with local logs or Cloud Logging entries.
 
-`GET /health` verifies that the API process is alive.
-
-`GET /ready` validates runtime configuration for the selected classifier provider and BigQuery persistence settings.
-
 See [`docs/runtime_observability.md`](docs/runtime_observability.md) for more details.
 
 ## Docker
@@ -396,12 +419,24 @@ The backend is designed to run on Cloud Run as a containerized FastAPI service.
 
 Deployment uses:
 
-- Docker
-- Artifact Registry
-- Cloud Build
-- Cloud Run
-- BigQuery
-- Runtime environment variables
+- Docker.
+- Cloud Build.
+- Artifact Registry.
+- Cloud Run.
+- BigQuery.
+- Secret Manager.
+- Runtime environment variables.
+- Runtime service account.
+
+The deployed service was validated with:
+
+```text
+GET  /health
+GET  /ready
+POST /incidents/classify
+GET  /incidents
+GET  /incidents/{incident_id}
+```
 
 See [`docs/cloud_run_deployment.md`](docs/cloud_run_deployment.md) for deployment instructions.
 
@@ -430,14 +465,54 @@ Recommended roles for this project:
 - `roles/bigquery.jobUser`
 - `roles/bigquery.dataEditor`
 
+Gemini API access is managed through Secret Manager when running in cloud mode.
+
 See [`docs/cloud_iam_and_validation.md`](docs/cloud_iam_and_validation.md) for IAM setup and deployment validation checks.
+
+## Postman Cloud Validation
+
+The project includes a Postman validation suite for the deployed Cloud Run API.
+
+Files:
+
+```text
+postman/ai_it_incident_classifier_cloud_validation.postman_collection.json
+postman/ai_it_incident_classifier_cloud_validation.postman_environment.json
+docs/postman_cloud_validation_suite.md
+```
+
+The collection validates:
+
+- Runtime endpoints.
+- Request tracing headers.
+- Valid incident classification cases.
+- Payload validation errors.
+- Incident history retrieval.
+- Incident detail lookup.
+- Unknown incident handling.
+
+The collection can run by itself using collection variables. The environment file is optional and can be imported when a separate Postman environment is preferred.
+
+Recommended execution order:
+
+```text
+01 Runtime
+02 Classification - Valid Cases
+04 Incident History
+03 Classification - Validation Errors
+05 Cloud Evidence
+```
+
+Run the suite with Cloud Run in `mock` mode for normal validation to avoid consuming Gemini quota.
+
+See [`docs/postman_cloud_validation_suite.md`](docs/postman_cloud_validation_suite.md) for the full validation guide.
 
 ## Environment Variables
 
 The project uses environment-based configuration.
 
 ```env
-APP_NAME=AI IT Incident Classifier
+APP_NAME="AI IT Incident Classifier"
 APP_VERSION=0.1.0
 ENVIRONMENT=local
 
@@ -452,19 +527,22 @@ GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
 ```
 
-Real secrets such as API keys must be configured locally or as cloud runtime environment variables. They must never be committed to the repository.
+Real secrets such as API keys must be configured locally or as cloud runtime secrets. They must never be committed to the repository.
 
 ## Tech Stack
 
-- Python
-- FastAPI
-- Pydantic
-- Gemini API
-- Google Cloud Run
-- BigQuery
-- Docker
-- Postman
-- React + Vite
+- Python.
+- FastAPI.
+- Pydantic.
+- Gemini API.
+- Google Cloud Run.
+- Cloud Build.
+- Artifact Registry.
+- Secret Manager.
+- BigQuery.
+- Docker.
+- Postman.
+- React + Vite.
 
 ## Repository Structure
 
@@ -567,14 +645,16 @@ The current implementation includes:
 - `POST /incidents/classify`.
 - `GET /incidents`.
 - `GET /incidents/{incident_id}`.
-- BigQuery-backed incident history queries.
+- BigQuery-backed incident persistence and history queries.
 - Structured application logging.
 - Request tracing middleware with `X-Request-ID` response headers.
 - Centralized API error helpers.
 - Runtime readiness checks.
+- Docker image build support.
+- Cloud Run deployment.
+- Gemini API key access through Secret Manager.
+- Postman Cloud Validation Suite.
 - Automated tests for the current backend behavior.
-
-Docker and Cloud Run deployment are planned for later project stages.
 
 ## Portfolio Scope
 
@@ -584,5 +664,7 @@ This project demonstrates practical skills in:
 - Generative AI integration.
 - IT operations automation.
 - Backend validation and structured API contracts.
-- Google Cloud deployment foundations.
+- Google Cloud deployment.
+- Containerized serverless APIs.
 - Operational data persistence for analysis.
+- API validation with Postman.
