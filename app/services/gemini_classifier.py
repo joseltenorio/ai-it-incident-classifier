@@ -1,11 +1,11 @@
 # app/services/gemini_classifier.py
 
 import logging
-from time import perf_counter
+from time import perf_counter, sleep
 from typing import Any
 
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from app.config import settings
 from app.core.classification_validator import validate_or_fallback
@@ -13,6 +13,10 @@ from app.core.prompt_builder import build_incident_classification_prompt
 from app.schemas import IncidentClassification, IncidentRequest
 
 logger = logging.getLogger(__name__)
+
+# Service-side failures can happen when the model is temporarily overloaded.
+# These are safe to retry because the request is read-only from the model side.
+TRANSIENT_GEMINI_STATUS_CODES = {500, 503, 504}
 
 
 class GeminiClassifierError(RuntimeError):
@@ -25,8 +29,8 @@ def classify_incident_with_gemini(
     """Classify an incident using Gemini API.
 
     The function returns the validated classification, the raw model output
-    and the model latency in milliseconds. The raw output will later be useful
-    for BigQuery traceability.
+    and the model latency in milliseconds. The raw output is stored later in
+    BigQuery for traceability.
     """
 
     if not settings.gemini_api_key:
@@ -36,9 +40,8 @@ def classify_incident_with_gemini(
 
     prompt = build_incident_classification_prompt(request)
 
-    # Retries are limited to one attempt during local development.
-    # This prevents one Swagger/Postman request from being multiplied into
-    # several Gemini API attempts when the API returns 429 rate-limit errors.
+    # SDK-level retries are disabled so we control exactly which failures are
+    # retried. This prevents accidental repeated calls for non-transient errors.
     client = genai.Client(
         api_key=settings.gemini_api_key,
         http_options=types.HttpOptions(
@@ -49,15 +52,7 @@ def classify_incident_with_gemini(
     started_at = perf_counter()
 
     try:
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=0,
-                response_mime_type="application/json",
-                response_schema=IncidentClassification,
-            ),
-        )
+        response = _generate_content_with_retries(client, prompt)
     except Exception as exc:
         logger.exception("Gemini API request failed.")
         raise GeminiClassifierError(f"Gemini API request failed: {exc}") from exc
@@ -72,6 +67,64 @@ def classify_incident_with_gemini(
         classification = validate_or_fallback(_safe_empty_payload())
 
     return classification, raw_output, latency_ms
+
+
+def _generate_content_with_retries(
+    client: genai.Client,
+    prompt: str,
+    max_attempts: int = 3,
+) -> Any:
+    """Call Gemini with retries for transient service-side failures.
+
+    Transient errors such as 500, 503 and 504 can happen when the service is
+    temporarily overloaded. Non-transient errors like invalid requests,
+    authentication failures or billing failures are not retried.
+    """
+
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return client.models.generate_content(
+                model=settings.gemini_model,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0,
+                    response_mime_type="application/json",
+                    response_schema=IncidentClassification,
+                ),
+            )
+        except errors.APIError as exc:
+            status_code = getattr(exc, "status_code", None)
+            last_error = exc
+
+            if status_code not in TRANSIENT_GEMINI_STATUS_CODES:
+                logger.error(
+                    "Gemini API failed with non-retryable status %s.",
+                    status_code,
+                )
+                raise
+
+            if attempt == max_attempts:
+                logger.error(
+                    "Gemini API failed after %s attempts with status %s.",
+                    max_attempts,
+                    status_code,
+                )
+                raise
+
+            wait_seconds = attempt
+            logger.warning(
+                "Gemini API transient failure status=%s attempt=%s/%s. "
+                "Retrying in %s second(s).",
+                status_code,
+                attempt,
+                max_attempts,
+                wait_seconds,
+            )
+            sleep(wait_seconds)
+
+    raise GeminiClassifierError(f"Gemini API request failed: {last_error}")
 
 
 def _extract_output_text(response: Any) -> str:
